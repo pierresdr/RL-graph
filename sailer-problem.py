@@ -9,6 +9,7 @@ import itertools
 import math
 import copy
 import sklearn as sk
+from scipy.optimize import least_squares
 
 #%% CREATE STOPS TO VISIT IN 2D
 
@@ -97,7 +98,7 @@ heldCarp(dist_mat)
 
 
 
-class state_action:
+class state_action_IRL:
     def __init__(self):
         self.r = list()
 
@@ -109,11 +110,12 @@ class state_action:
     def addObsOfR(self,r):
         self.r.append(r)
     
-    def
+    def regressionR(self):
+        self.r = np.mean(np.array(r))
     
 
 
-class state:
+class state_IRL:
     #   Class which contains the returns and probabilities for a given state
     def __init__(self,nb_actions):
         self.nb_actions = nb_actions
@@ -160,19 +162,22 @@ class state:
     def set_policy(self,init_policy):
         self.policy = init_policy
     
+    def regressionR(self):
+        for i in range(nb_actions):
+            self.actions[i].regressionR()
+    
 
 
 class MDP_IRL:
     #   Class which contains all the states, and their return and probabilities
-    def __init__(self,action_by_state,gamma):
-        self.nb_states = len(action_by_state)
+    def __init__(self,length,gamma):
+        self.nb_states = length
         self.states=list()
         self.gamma = gamma
         
         #build the states contained in MDP
-        self.action_by_state=np.cumsum(action_by_state)
-        for i in range(self.nb_states-1 ):
-            self.states.append(state(action_by_state[i]))
+        for i in range(self.nb_states):
+            self.states.append(state_IRL(length))
     
     def trajectory(self,j,T):
         #   For QUESTION 3
@@ -182,9 +187,20 @@ class MDP_IRL:
             result += gamma**(i+1)*temp
         return result
     
+    def regressionR(self):
+        for i in range(nb_states):
+            self.states[i].regressionR()
+    
         
 #%%
-        
+"""      
+def rParam(r,param):
+    return np.exp(r*param)
+
+def residual(param,x,y):
+    return rParam(x,param) - y
+"""
+
 
 class state_action:
     def __init__(self,r,P):
@@ -301,20 +317,23 @@ P = np.array([[0.55,0.45,0], #the probabilities p(y|x,a) for each (x,a) in the r
              [0,0,1]])
 
 MDP_opt = MDP(r,P,gamma)
+
+
     
-MDP_IRL = MDP_IRL(action_by_state,gamma)   
+MDP_IRL = MDP_IRL(len(r),gamma)   
     
 
-def CSI(DC,DR,action_by_state,gamma):
+def CSI(MDP_IRL,DC,DR,action_by_state,gamma):
     """DC contains a list of states in its first lign and a list of corresponding
     actions given expert policy in the second lign
     """
     classifier = sk.svm.SVC(gamma='auto')
     classifier.fit(DC[0,:],DC[1,:])
     
-    r = MDP(action_by_state,gamma)
     
     for i in range(np.shape(DR)[1]):
-        r.state[DR[0,i]] = classifier.score(DR[0,i],DR[1,i]) - gamma * classifier.score(DR[2,i],classifier)
-        
+        MDP_IRL.state[DR[0,i]].actions[DR[1,i]].addObsOfR(classifier.score(DR[0,i],DR[1,i]) - gamma * classifier.score(DR[2,i],classifier))
+    
+    MDP_IRL.regressionR()
+    
     return r
